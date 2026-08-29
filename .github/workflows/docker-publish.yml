@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Calculate version
         id: version
@@ -29,6 +31,41 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION}"
+
+      - name: Build release notes
+        id: notes
+        shell: bash
+        run: |
+          PREVIOUS_TAG=$(git tag --list 'v1.1.*' --sort=-v:refname | head -n 1)
+
+          {
+            echo "## Cambios en esta versión"
+            echo
+
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log "${PREVIOUS_TAG}..HEAD" --pretty=format:'- %s (`%h`)' --no-merges
+            else
+              git log -n 10 --pretty=format:'- %s (`%h`)' --no-merges
+            fi
+
+            echo
+            echo
+            echo "## Docker"
+            echo
+            echo "Imagen de esta versión:"
+            echo
+            echo '```text'
+            echo "ghcr.io/rit4lin/sestibalsa-monitor:${{ steps.version.outputs.version }}"
+            echo '```'
+            echo
+            echo "Última versión estable:"
+            echo
+            echo '```text'
+            echo "ghcr.io/rit4lin/sestibalsa-monitor:latest"
+            echo '```'
+          } > release-notes.md
+
+          cat release-notes.md
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -75,18 +112,5 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           target_commitish: ${{ github.sha }}
           name: Sestibalsa Monitor ${{ steps.version.outputs.version }}
+          body_path: release-notes.md
           generate_release_notes: true
-          body: |
-            ## Docker
-
-            Imagen de esta versión:
-
-            ```text
-            ghcr.io/rit4lin/sestibalsa-monitor:${{ steps.version.outputs.version }}
-            ```
-
-            Última versión estable:
-
-            ```text
-            ghcr.io/rit4lin/sestibalsa-monitor:latest
-            ```
