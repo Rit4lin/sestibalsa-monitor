@@ -1,6 +1,8 @@
 # Sestibalsa Monitor
 
-Pequeño servicio para Unraid que inicia sesión en la web de Sestibalsa, lee los trabajos pendientes y expone un JSON sencillo para Home Assistant.
+Pequeño servicio Docker que inicia sesión en la web de Sestibalsa, lee los trabajos pendientes y expone un JSON sencillo para integrarlo con Home Assistant u otros sistemas.
+
+Puede ejecutarse en cualquier host compatible con Docker, por ejemplo Linux, Unraid, Synology, TrueNAS SCALE, Proxmox mediante una VM/LXC con Docker, un VPS o un servidor doméstico.
 
 ## Endpoints
 
@@ -15,15 +17,46 @@ Pequeño servicio para Unraid que inicia sesión en la web de Sestibalsa, lee lo
 - `CACHE_SECONDS` (opcional, por defecto `180`)
 - `CONFIG_DIR` (opcional, por defecto `/config`)
 
-## Unraid
+## Docker
 
-Puerto recomendado: `8765:8765`.
+Puerto recomendado:
 
-Ruta persistente recomendada:
+```text
+8765:8765
+```
+
+Volumen persistente recomendado:
+
+```text
+./config:/config
+```
+
+Ejemplo con `docker run`:
+
+```bash
+docker run -d \
+  --name sestibalsa-monitor \
+  --restart unless-stopped \
+  -p 8765:8765 \
+  -v ./config:/config \
+  -e SESTIBALSA_USER="tu_usuario" \
+  -e SESTIBALSA_PASSWORD="tu_contraseña" \
+  -e API_KEY="tu_api_key" \
+  -e CACHE_SECONDS="180" \
+  sestibalsa-monitor
+```
+
+En plataformas con interfaz gráfica para Docker, configura esos mismos puertos, variables y el volumen `/config` desde la interfaz.
+
+### Ejemplo en Unraid
+
+Puedes mapear:
 
 ```text
 /mnt/user/appdata/sestibalsa-monitor -> /config
 ```
+
+Y configurar las variables de entorno directamente desde la plantilla del contenedor.
 
 ## Home Assistant
 
@@ -31,7 +64,7 @@ Ejemplo:
 
 ```yaml
 rest:
-  - resource: "http://192.168.1.11:8765/turnos"
+  - resource: "http://IP_DEL_HOST_DOCKER:8765/turnos"
     method: GET
     headers:
       X-API-Key: !secret sestibalsa_api_key
@@ -52,12 +85,16 @@ rest:
           - stale
 ```
 
-## Icono para Unraid
+## Icono
 
-Usa esta URL en `Docker -> Sestibalsa -> Edit -> Icon URL`:
+El icono del proyecto está disponible en:
 
 ```text
 https://raw.githubusercontent.com/Rit4lin/sestibalsa-monitor/main/assets/icon.png
 ```
 
-Las credenciales no deben almacenarse en el repositorio. Configúralas como variables de entorno en Unraid.
+En Unraid puedes usar esa URL en `Docker -> Sestibalsa -> Edit -> Icon URL`. En otras plataformas puedes reutilizarla donde admitan un icono personalizado.
+
+## Seguridad
+
+No almacenes las credenciales de Sestibalsa ni la `API_KEY` dentro del repositorio. Configúralas como variables de entorno o mediante el sistema de secretos de tu plataforma Docker.
