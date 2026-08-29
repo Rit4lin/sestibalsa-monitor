@@ -29,6 +29,15 @@ cache = None
 cache_timestamp = 0
 cache_lock = Lock()
 
+# Una sola sesión HTTP para todo el ciclo de vida del proceso.
+# Conserva las cookies de Sestibalsa y evita iniciar sesión en cada consulta.
+session = requests.Session()
+session.headers.update({
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/152 Safari/537.36"
+})
+session_lock = Lock()
+session_authenticated = False
+
 
 def cargar_cache_disco():
     global cache
@@ -92,12 +101,22 @@ def parse_jornada(fecha, jornada):
     return resultado
 
 
-def obtener_turnos():
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/152 Safari/537.36"
-    })
+def pagina_es_login(response):
+    """Detecta si Sestibalsa nos ha devuelto al formulario de acceso."""
+    if "logon.aspx" in response.url.lower():
+        return True
 
+    soup = BeautifulSoup(response.text, "html.parser")
+    return (
+        soup.find("input", {"name": "TextBox1"}) is not None
+        and soup.find("input", {"name": "TextBox2"}) is not None
+    )
+
+
+def iniciar_sesion():
+    global session_authenticated
+
+    # Obtener los tokens ASP.NET del formulario de login.
     response = session.get(LOGIN, timeout=20)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
@@ -111,17 +130,61 @@ def obtener_turnos():
         "Button1": "Entrar",
     }
 
-    response = session.post(LOGIN, data=datos_login, timeout=20, allow_redirects=True)
+    response = session.post(
+        LOGIN,
+        data=datos_login,
+        timeout=20,
+        allow_redirects=True,
+    )
     response.raise_for_status()
-    if "logon.aspx" in response.url.lower():
+
+    if pagina_es_login(response):
+        session_authenticated = False
         raise RuntimeError("Login de Sestibalsa incorrecto")
 
-    response = session.get(TURNOS, timeout=20)
-    response.raise_for_status()
-    if "logon.aspx" in response.url.lower():
-        raise RuntimeError("La sesión de Sestibalsa no es válida")
+    session_authenticated = True
+    print("Sesión de Sestibalsa iniciada", flush=True)
 
+
+def obtener_pagina_turnos():
+    """
+    Obtiene trabpend.aspx reutilizando la sesión existente.
+
+    En funcionamiento normal esto supone una sola petición a Sestibalsa.
+    Si la sesión ha caducado, se autentica de nuevo y reintenta una vez.
+    """
+    global session_authenticated
+
+    with session_lock:
+        if not session_authenticated:
+            iniciar_sesion()
+
+        response = session.get(TURNOS, timeout=20, allow_redirects=True)
+        response.raise_for_status()
+
+        if not pagina_es_login(response):
+            return response
+
+        # La cookie/sesión ha caducado. Limpiamos la sesión y hacemos login otra vez.
+        print("Sesión de Sestibalsa caducada; renovando", flush=True)
+        session.cookies.clear()
+        session_authenticated = False
+        iniciar_sesion()
+
+        response = session.get(TURNOS, timeout=20, allow_redirects=True)
+        response.raise_for_status()
+
+        if pagina_es_login(response):
+            session_authenticated = False
+            raise RuntimeError("No se pudo renovar la sesión de Sestibalsa")
+
+        return response
+
+
+def obtener_turnos():
+    response = obtener_pagina_turnos()
     soup = BeautifulSoup(response.text, "html.parser")
+
     tabla = soup.find("table", id="dg")
     if tabla is None:
         raise RuntimeError("No encuentro la tabla #dg")
