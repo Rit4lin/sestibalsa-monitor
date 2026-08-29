@@ -4,6 +4,23 @@ Pequeño servicio Docker que inicia sesión en la web de Sestibalsa, lee los tra
 
 Puede ejecutarse en cualquier host compatible con Docker, por ejemplo Linux, Unraid, Synology, TrueNAS SCALE, Proxmox mediante una VM/LXC con Docker, un VPS o un servidor doméstico.
 
+## Imagen Docker
+
+La imagen se construye y publica automáticamente en GitHub Container Registry cada vez que hay cambios en `main`.
+
+Imagen recomendada:
+
+```text
+ghcr.io/rit4lin/sestibalsa-monitor:latest
+```
+
+También se publican etiquetas por commit con formato `sha-...` para poder fijar o recuperar una versión concreta si fuera necesario.
+
+La imagen se publica para:
+
+- `linux/amd64`
+- `linux/arm64`
+
 ## Endpoints
 
 - `/health` — comprobación básica del servicio.
@@ -61,7 +78,7 @@ Volumen persistente recomendado:
 ./config:/config
 ```
 
-Ejemplo con `docker run`:
+Ejemplo con `docker run` usando la imagen publicada:
 
 ```bash
 docker run -d \
@@ -73,12 +90,18 @@ docker run -d \
   -e SESTIBALSA_PASSWORD="tu_contraseña" \
   -e API_KEY="tu_api_key" \
   -e CACHE_SECONDS="180" \
-  sestibalsa-monitor
+  ghcr.io/rit4lin/sestibalsa-monitor:latest
 ```
 
 En plataformas con interfaz gráfica para Docker, configura esos mismos puertos, variables y el volumen `/config` desde la interfaz.
 
 ### Ejemplo en Unraid
+
+En `Repository` usa:
+
+```text
+ghcr.io/rit4lin/sestibalsa-monitor:latest
+```
 
 Puedes mapear:
 
@@ -130,6 +153,18 @@ https://raw.githubusercontent.com/Rit4lin/sestibalsa-monitor/main/assets/icon.pn
 ```
 
 En Unraid puedes usar esa URL en `Docker -> Sestibalsa -> Edit -> Icon URL`. En otras plataformas puedes reutilizarla donde admitan un icono personalizado.
+
+## Actualizaciones
+
+Los cambios enviados a `main` activan GitHub Actions, que construye y publica automáticamente una nueva imagen `latest` en GHCR.
+
+En un host Docker puedes actualizar con:
+
+```bash
+docker pull ghcr.io/rit4lin/sestibalsa-monitor:latest
+```
+
+Después recrea o reinicia el contenedor con la nueva imagen según la plataforma utilizada.
 
 ## Seguridad
 
